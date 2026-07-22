@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# 环境
+.env
+.venv/
+venv/
+
+# 数据 — 不提交登录态和数据库
+cookies.json
+db/yamibo.db
+db/configs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Playwright
+.playwright-cli/
+
+# 测试产物
+tests/integration_results.json
+.pytest_cache/
