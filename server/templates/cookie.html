@@ -87,7 +87,7 @@ function copyConsoleScript() {
     });
 }
 
-async function uploadCookie(data) {
+async function uploadCookieData(data) {
     const r = await fetch("/api/v1/admin/cookie/upload", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
@@ -103,19 +103,25 @@ async function uploadCookie(data) {
 async function uploadCookie() {
     const data = document.getElementById("cookie-data").value.trim();
     if (!data) return alert("请先粘贴数据");
-    await uploadCookie(data);
+    await uploadCookieData(data);
 }
 
 async function uploadCookieString() {
     const raw = document.getElementById("cookie-string").value.trim();
     if (!raw) return alert("请先粘贴 Cookie 字符串");
-    await uploadCookie(raw);
+    await uploadCookieData(raw);
+    const badge = document.getElementById("cookie-string-status");
+    badge.textContent = "已保存";
+    badge.className = "status-inline success";
 }
 
 async function uploadCookieJson() {
     const raw = document.getElementById("cookie-json").value.trim();
     if (!raw) return alert("请先粘贴 JSON");
-    await uploadCookie(raw);
+    await uploadCookieData(raw);
+    const badge = document.getElementById("cookie-json-status");
+    badge.textContent = "已保存";
+    badge.className = "status-inline success";
 }
 
 async function verifyCookie() {

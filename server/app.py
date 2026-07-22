@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 import uvicorn
 
 from server.config import ServerConfig, ROOT
@@ -57,6 +58,10 @@ def create_app() -> FastAPI:
     static_dir = ROOT / "server" / "static"
     static_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    @app.get("/")
+    async def root():
+        return RedirectResponse("/admin")
 
     @app.get("/health")
     async def health():
