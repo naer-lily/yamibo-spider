@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}系统配置 - Yamibo Spider{% endblock %}
+
+{% block content %}
+<h1>系统配置</h1>
+
+<h2>AI 配置</h2>
+<form id="ai-form" onsubmit="saveAiConfig(event)">
+    <div class="form-group">
+        <label>Provider</label>
+        <select id="ai-provider">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI</option>
+            <option value="google">Google (Gemini)</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai_compat">OpenAI 兼容</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Model</label>
+        <input type="text" id="ai-model" placeholder="deepseek-chat">
+    </div>
+    <div class="form-group">
+        <label>API Key</label>
+        <input type="password" id="ai-api-key" placeholder="填写以修改，留空保持不变">
+    </div>
+    <div class="form-group" id="base-url-group">
+        <label>Base URL（openai_compat 必填）</label>
+        <input type="text" id="ai-base-url" placeholder="https://api.openai.com/v1">
+    </div>
+    <button type="submit" class="btn btn-primary">保存 AI 配置</button>
+    <span id="ai-status" class="status-inline"></span>
+</form>
+
+<hr>
+
+<h2>轮询配置</h2>
+<form id="poll-form" onsubmit="savePollConfig(event)">
+    <div class="inline-form">
+        <label>轮询间隔（分钟）</label>
+        <input type="number" id="poll-interval" min="1" max="1440" value="30">
+    </div>
+    <div class="inline-form">
+        <label>启用轮询</label>
+        <input type="checkbox" id="poll-enabled" checked>
+    </div>
+    <button type="submit" class="btn btn-primary">保存轮询配置</button>
+    <span id="poll-status" class="status-inline"></span>
+</form>
+
+<div class="poll-controls">
+    <button onclick="startPoll()" class="btn">启动轮询</button>
+    <button onclick="stopPoll()" class="btn">停止轮询</button>
+    <button onclick="runNow()" class="btn">立即执行</button>
+</div>
+
+<h2>当前轮询状态</h2>
+<div id="poll-info">加载中...</div>
+
+<hr>
+
+<h2>搜索功能</h2>
+<p><em>搜索限制在译文区（forum-55）。通过 LNReader 源 API 触发：</em></p>
+<code>GET /api/v1/source/search?q=关键词&page=1</code>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCurrentConfig() {
+    const r = await fetch("/api/v1/admin/ai-config");
+    const d = await r.json();
+    document.getElementById("ai-provider").value = d.provider;
+    document.getElementById("ai-model").value = d.model;
+    document.getElementById("ai-base-url").value = d.base_url || "";
+    document.getElementById("ai-api-key").placeholder = d.api_key_set ? "（已设置，留空保持不变）" : "请输入 API Key";
+
+    const pr = await fetch("/api/v1/admin/poll/status");
+    const p = await pr.json();
+    document.getElementById("poll-interval").value = p.interval_minutes;
+    document.getElementById("poll-enabled").checked = p.running;
+    updatePollInfo(p);
+}
+
+function updatePollInfo(p) {
+    document.getElementById("poll-info").innerHTML = `
+        <table>
+            <tr><td>运行中</td><td>${p.running ? "是" : "否"}</td></tr>
+            <tr><td>间隔</td><td>${p.interval_minutes} 分钟</td></tr>
+            <tr><td>上次执行</td><td>${p.last_run ? new Date(p.last_run).toLocaleString() : "从未"}</td></tr>
+            <tr><td>下次执行</td><td>${p.next_run ? new Date(p.next_run).toLocaleString() : "—"}</td></tr>
+            <tr><td>活跃书目</td><td>${p.active_books}</td></tr>
+        </table>
+    `;
+}
+
+async function saveAiConfig(e) {
+    e.preventDefault();
+    const body = {
+        provider: document.getElementById("ai-provider").value,
+        model: document.getElementById("ai-model").value,
+        base_url: document.getElementById("ai-base-url").value || null,
+    };
+    const key = document.getElementById("ai-api-key").value;
+    if (key) body.api_key = key;
+
+    const r = await fetch("/api/v1/admin/ai-config", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    document.getElementById("ai-status").textContent = r.ok ? "已保存" : ("错误: " + (d.detail || ""));
+    document.getElementById("ai-status").className = "status-inline " + (r.ok ? "success" : "error");
+}
+
+async function savePollConfig(e) {
+    e.preventDefault();
+    const interval = parseInt(document.getElementById("poll-interval").value);
+    const enabled = document.getElementById("poll-enabled").checked;
+    const r = await fetch("/api/v1/admin/poll/config", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({interval_minutes: interval, enabled: enabled}),
+    });
+    const d = await r.json();
+    document.getElementById("poll-status").textContent = r.ok ? "已保存" : ("错误: " + (d.detail || ""));
+    document.getElementById("poll-status").className = "status-inline " + (r.ok ? "success" : "error");
+    if (r.ok) {
+        const pr = await fetch("/api/v1/admin/poll/status");
+        updatePollInfo(await pr.json());
+    }
+}
+
+async function startPoll() {
+    await fetch("/api/v1/admin/poll/start", {method: "POST"});
+    const pr = await fetch("/api/v1/admin/poll/status");
+    updatePollInfo(await pr.json());
+}
+
+async function stopPoll() {
+    await fetch("/api/v1/admin/poll/stop", {method: "POST"});
+    const pr = await fetch("/api/v1/admin/poll/status");
+    updatePollInfo(await pr.json());
+}
+
+async function runNow() {
+    await fetch("/api/v1/admin/poll/run-now", {method: "POST"});
+    alert("轮询已触发，结果将写入日志");
+}
+
+// provider 切换时显示/隐藏 base_url
+document.getElementById("ai-provider").addEventListener("change", function() {
+    document.getElementById("base-url-group").style.display =
+        this.value === "openai_compat" ? "block" : "block";
+});
+
+loadCurrentConfig();
+</script>
+{% endblock %}

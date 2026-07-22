@@ -27,3 +27,9 @@ db/configs/
 # 测试产物
 tests/integration_results.json
 .pytest_cache/
+
+# Docker
+docker-compose.yml
+
+# Node (插件构建)
+plugins/node_modules/

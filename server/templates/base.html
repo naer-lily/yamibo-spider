@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Yamibo Spider{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <h2>Yamibo Spider</h2>
+            <small>管理后台</small>
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="/admin" class="{% if request.url.path == '/admin' %}active{% endif %}">仪表盘</a></li>
+            <li><a href="/admin/books" class="{% if request.url.path == '/admin/books' %}active{% endif %}">书目管理</a></li>
+            <li><a href="/admin/config" class="{% if request.url.path == '/admin/config' %}active{% endif %}">系统配置</a></li>
+            <li><a href="/admin/cookie" class="{% if request.url.path == '/admin/cookie' %}active{% endif %}">Cookie</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <a href="/docs" target="_blank">API 文档</a>
+        </div>
+    </nav>
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

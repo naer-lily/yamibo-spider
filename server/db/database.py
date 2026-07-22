@@ -5,7 +5,7 @@ import aiosqlite
 from pathlib import Path
 
 from server.config import DB_PATH
-from server.domain import BookConfig, BookMeta, Chapter, LibraryItem, ChapterPattern, TocStrategy
+from server.domain import BookConfig, BookMeta, Chapter, LibraryItem, ChapterPattern, TocStrategy, CookieStatus
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS books (
@@ -172,3 +172,81 @@ async def count_books() -> int:
     count = result[0] if result else 0
     await db.close()
     return count
+
+
+async def delete_book(tid: str) -> bool:
+    """删除书目及其所有章节"""
+    db = await get_db()
+    await db.execute("DELETE FROM chapters WHERE book_tid = ?", (tid,))
+    cursor = await db.execute("DELETE FROM books WHERE tid = ?", (tid,))
+    await db.commit()
+    deleted = cursor.rowcount > 0
+    await db.close()
+    return deleted
+
+
+async def get_chapters(tid: str) -> list[Chapter]:
+    """获取指定书目的章节列表"""
+    db = await get_db()
+    rows = await db.execute(
+        "SELECT * FROM chapters WHERE book_tid = ? ORDER BY chapter_index", (tid,)
+    )
+    chapters = [
+        Chapter(
+            index=ch["chapter_index"],
+            title=ch["title"],
+            pid=ch["pid"],
+            volume=ch["volume"],
+        )
+        for ch in await rows.fetchall()
+    ]
+    await db.close()
+    return chapters
+
+
+async def list_books_detailed() -> list[LibraryItem]:
+    """列出所有已收藏书目（含策略和章节数）"""
+    db = await get_db()
+    rows = await db.execute("""
+        SELECT b.tid, b.title, b.author, b.strategy, b.created_at,
+               (SELECT COUNT(*) FROM chapters WHERE book_tid = b.tid) AS ch_count
+        FROM books b ORDER BY b.created_at DESC
+    """)
+    items = [
+        LibraryItem(
+            tid=r["tid"], title=r["title"], author=r["author"],
+            strategy=r["strategy"], chapter_count=r["ch_count"],
+            added_at=r["created_at"],
+        )
+        for r in await rows.fetchall()
+    ]
+    await db.close()
+    return items
+
+
+async def get_strategy_counts() -> dict[str, int]:
+    """获取各策略的书目数量统计"""
+    db = await get_db()
+    rows = await db.execute("SELECT strategy, COUNT(*) as cnt FROM books GROUP BY strategy")
+    result = {r["strategy"]: r["cnt"] for r in await rows.fetchall()}
+    await db.close()
+    return result
+
+
+async def check_cookie_status() -> CookieStatus:
+    """异步检测 Cookie 文件是否存在及其关键字段"""
+    from server.config import COOKIE_PATH
+    import json
+
+    if not COOKIE_PATH.exists():
+        return CookieStatus(exists=False, valid=False, key_cookies=[])
+
+    try:
+        raw = json.loads(COOKIE_PATH.read_text("utf-8"))
+        cookies = {c["name"]: c["value"] for c in raw if c.get("name")}
+        key_names = ["discuz_uid", "discuz_pw", "discuz_sid"]
+        key_cookies = [n for n in key_names if n in cookies]
+        valid = "discuz_uid" in cookies and cookies.get("discuz_uid", "0") != "0"
+        return CookieStatus(exists=True, valid=valid, key_cookies=key_cookies)
+    except Exception:
+        return CookieStatus(exists=True, valid=False, key_cookies=[])

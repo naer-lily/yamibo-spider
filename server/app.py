@@ -5,9 +5,10 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from server.config import ServerConfig
+from server.config import ServerConfig, ROOT
 from server.routes.source import router as source_router
 from server.routes.library import router as library_router
 from server.routes.admin import router as admin_router
@@ -23,6 +24,7 @@ def load_config() -> ServerConfig:
     cfg.ai.model = os.environ.get("AI_MODEL", cfg.ai.model)
     cfg.ai.base_url = os.environ.get("AI_BASE_URL") or None
     cfg.poll_interval_minutes = int(os.environ.get("POLL_INTERVAL", "30"))
+    cfg.poll_enabled = os.environ.get("POLL_ENABLED", "1").lower() not in ("0", "false", "no")
     return cfg
 
 
@@ -30,7 +32,7 @@ def load_config() -> ServerConfig:
 async def lifespan(app: FastAPI):
     from server.library.scheduler import start_scheduler
     cfg: ServerConfig = app.state.server_config
-    if cfg.poll_interval_minutes > 0:
+    if cfg.poll_enabled and cfg.poll_interval_minutes > 0:
         start_scheduler(cfg.poll_interval_minutes)
     yield
 
@@ -41,14 +43,20 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Yamibo Spider",
         description="百合会论坛小说镜像后端",
-        version="2.0.0",
+        version="2.1.0",
         lifespan=lifespan,
     )
+
     app.state.server_config = server_config
 
     app.include_router(source_router)
     app.include_router(library_router)
     app.include_router(admin_router)
+
+    # 前端静态文件
+    static_dir = ROOT / "server" / "static"
+    static_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.get("/health")
     async def health():

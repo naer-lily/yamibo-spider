@@ -87,3 +87,83 @@ def test_extract_pid_links_no_links():
     from server.yamibo.parser import extract_pid_links
 
     assert extract_pid_links("<div>no links</div>") == []
+
+
+def test_extract_posts_table_plhin():
+    """plhin 作为 table 元素的情况"""
+    from server.yamibo.parser import extract_posts
+
+    html = """
+    <table class="plhin" id="pid999001">
+      <td class="t_f">表格形式的楼层内容</td>
+    </table>
+    """
+    posts = extract_posts(html)
+    assert len(posts) == 1
+    assert posts[0][0] == "999001"
+    assert "表格形式的楼层内容" in posts[0][1]
+
+
+def test_extract_posts_div_plhin_with_table():
+    """plhin 是 div 内含 table id 的情况"""
+    from server.yamibo.parser import extract_posts
+
+    html = """
+    <div class="plhin">
+      <table id="pid999002"></table>
+      <div class="t_f">Div包含表格的内容</div>
+    </div>
+    """
+    posts = extract_posts(html)
+    assert len(posts) == 1
+    assert posts[0][0] == "999002"
+    assert "Div包含表格的内容" in posts[0][1]
+
+
+def test_extract_posts_skips_non_plhin():
+    """非 plhin 元素中的 t_f 不应被提取"""
+    from server.yamibo.parser import extract_posts
+
+    html = """
+    <div>
+      <table id="pid999999"></table>
+      <div class="t_f">不应被提取</div>
+    </div>
+    """
+    posts = extract_posts(html)
+    assert len(posts) == 0
+
+
+def test_extract_pid_links_empty_title():
+    """空标题的 pid 链接应被跳过"""
+    from server.yamibo.parser import extract_pid_links
+
+    html = '<a href="?pid=123"></a>'
+    links = extract_pid_links(html)
+    assert len(links) == 0
+
+
+def test_extract_pid_links_no_pid_param():
+    """没有 pid 参数的链接应被跳过"""
+    from server.yamibo.parser import extract_pid_links
+
+    html = '<a href="?thread=123">标题</a>'
+    links = extract_pid_links(html)
+    assert len(links) == 0
+
+
+def test_extract_author_uid_no_match():
+    """无 authorid 的 HTML"""
+    from server.yamibo.parser import extract_author_uid
+
+    html = '<a href="forum.php?mod=viewthread&tid=1">帖子</a>'
+    uid = extract_author_uid(html)
+    assert uid is None
+
+
+def test_extract_total_pages_non_digit():
+    """页面链接含非数字文本"""
+    from server.yamibo.parser import extract_total_pages
+
+    html = '<div class="pg"><a>1</a><a>下一页</a><a>...</a><a>10</a></div>'
+    assert extract_total_pages(html) == 10

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.log
+.git/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+plugins/node_modules/
+tests/
+.env
+.editorconfig
+Dockerfile
+docker-compose.yml
+.dockerignore

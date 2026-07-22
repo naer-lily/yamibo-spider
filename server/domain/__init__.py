@@ -74,4 +74,29 @@ class LibraryItem(BaseModel):
     tid: str
     title: str
     author: str
+    strategy: str = ""
+    chapter_count: int = 0
     added_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class PollStatus(BaseModel):
+    """轮询状态"""
+    running: bool = False
+    interval_minutes: int = 30
+    last_run: str | None = None
+    next_run: str | None = None
+    active_books: int = 0
+
+
+class CookieStatus(BaseModel):
+    """Cookie 状态"""
+    exists: bool = False
+    valid: bool = False
+    key_cookies: list[str] = Field(default_factory=list)
+
+
+class AdminStatus(BaseModel):
+    """管理仪表盘总览"""
+    book_count: int = 0
+    cookie: CookieStatus = Field(default_factory=CookieStatus)
+    poll: PollStatus = Field(default_factory=PollStatus)

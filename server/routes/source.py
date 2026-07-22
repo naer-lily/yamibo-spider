@@ -29,6 +29,19 @@ async def popular_novels(page: int = 1):
     ]
 
 
+@router.get("/search")
+async def search_novels(q: str = "", page: int = 1):
+    """搜索译文区内的帖子"""
+    if not q:
+        return []
+    try:
+        from server.yamibo.search import search_posts
+        items, total_pages = await search_posts(q, page)
+        return items
+    except Exception as e:
+        raise HTTPException(500, f"搜索失败: {e}")
+
+
 @router.get("/novel/yamibo/{tid}")
 async def parse_novel(tid: str, request: Request):
     cfg = get_config(request)

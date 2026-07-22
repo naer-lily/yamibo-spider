@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}书目管理 - Yamibo Spider{% endblock %}
+
+{% block content %}
+<h1>书目管理</h1>
+
+<div class="toolbar">
+    <form id="add-form" onsubmit="addBook(event)">
+        <input type="text" id="add-tid" placeholder="帖子 TID（如 557701）" required>
+        <button type="submit" class="btn btn-primary">添加书目</button>
+    </form>
+    <input type="text" id="search-input" placeholder="搜索已收藏书目..." oninput="filterBooks()">
+</div>
+
+<div id="add-status" class="status-msg" style="display:none"></div>
+
+<table id="book-table">
+    <thead>
+        <tr>
+            <th>TID</th>
+            <th>标题</th>
+            <th>作者</th>
+            <th>策略</th>
+            <th>章节数</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody id="book-tbody"></tbody>
+</table>
+
+<div id="chapter-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeChapterModal()">&times;</span>
+        <h2>章节列表</h2>
+        <div id="chapter-list"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allBooks = [];
+
+async function loadBooks() {
+    const r = await fetch("/api/v1/admin/books");
+    allBooks = await r.json();
+    renderBooks(allBooks);
+}
+
+function renderBooks(books) {
+    const tbody = document.getElementById("book-tbody");
+    tbody.innerHTML = books.map(b => `
+        <tr data-tid="${b.tid}">
+            <td>${b.tid}</td>
+            <td><strong>${esc(b.title)}</strong></td>
+            <td>${esc(b.author)}</td>
+            <td>${b.strategy}</td>
+            <td>${b.chapter_count}</td>
+            <td class="actions">
+                <button onclick="refreshBook('${b.tid}')" class="btn btn-sm">刷新</button>
+                <button onclick="showChapters('${b.tid}')" class="btn btn-sm">章节</button>
+                <button onclick="deleteBook('${b.tid}')" class="btn btn-sm btn-danger">删除</button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+function filterBooks() {
+    const q = document.getElementById("search-input").value.toLowerCase();
+    renderBooks(allBooks.filter(b =>
+        b.tid.includes(q) || b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
+    ));
+}
+
+async function addBook(e) {
+    e.preventDefault();
+    const tid = document.getElementById("add-tid").value.trim();
+    const status = document.getElementById("add-status");
+    status.style.display = "block";
+    status.textContent = "正在添加...";
+    try {
+        const r = await fetch("/api/v1/library/add", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({tid}),
+        });
+        const data = await r.json();
+        if (r.ok) {
+            status.textContent = data.status === "exists" ? "书目已存在" : `已添加: ${data.title}`;
+            status.className = "status-msg success";
+            document.getElementById("add-tid").value = "";
+            loadBooks();
+        } else {
+            status.textContent = data.detail || "添加失败";
+            status.className = "status-msg error";
+        }
+    } catch(e) {
+        status.textContent = "网络错误";
+        status.className = "status-msg error";
+    }
+}
+
+async function refreshBook(tid) {
+    try {
+        const r = await fetch(`/api/v1/admin/refresh/${tid}`, {method: "POST"});
+        const data = await r.json();
+        alert(`刷新完成: ${data.new_chapters} 个新章节`);
+        loadBooks();
+    } catch(e) {
+        alert("刷新失败");
+    }
+}
+
+async function deleteBook(tid) {
+    if (!confirm(`确认删除书目 ${tid}？此操作不可撤销。`)) return;
+    try {
+        await fetch(`/api/v1/admin/books/${tid}`, {method: "DELETE"});
+        loadBooks();
+    } catch(e) {
+        alert("删除失败");
+    }
+}
+
+async function showChapters(tid) {
+    const r = await fetch(`/api/v1/admin/books/${tid}/chapters`);
+    const chapters = await r.json();
+    document.getElementById("chapter-list").innerHTML = chapters.map((c, i) =>
+        `<p>${c.index}. ${esc(c.title)} <code>pid=${c.pid}</code> vol=${c.volume}</p>`
+    ).join("") || "<em>暂无章节</em>";
+    document.getElementById("chapter-modal").style.display = "flex";
+}
+
+function closeChapterModal() {
+    document.getElementById("chapter-modal").style.display = "none";
+}
+
+function esc(s) {
+    const el = document.createElement("span");
+    el.textContent = s;
+    return el.innerHTML;
+}
+
+loadBooks();
+</script>
+{% endblock %}

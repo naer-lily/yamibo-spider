@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Cookie 管理 - Yamibo Spider{% endblock %}
+
+{% block content %}
+<h1>Cookie 管理</h1>
+
+<h2>当前状态</h2>
+<div id="cookie-status-card">
+    <p>加载中...</p>
+</div>
+
+<h2>配置 Cookie</h2>
+<p>需要从已登录的浏览器中获取 Yamibo 论坛 Cookie。以下三种方式任选其一：</p>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('tab-console')">方式一：Console 快速导出（推荐）</button>
+    <button class="tab-btn" onclick="switchTab('tab-string')">方式二：粘贴 Cookie 字符串</button>
+    <button class="tab-btn" onclick="switchTab('tab-json')">方式三：粘贴 JSON</button>
+</div>
+
+<div id="tab-console" class="tab-content active">
+    <h3>在 Yamibo 网站的 Console 中运行以下代码</h3>
+    <p>先登录 <a href="https://bbs.yamibo.com" target="_blank">bbs.yamibo.com</a>，然后按 F12 打开开发者工具，切换到 Console 标签，粘贴以下代码并回车：</p>
+    <pre class="code-block" id="console-script">copy(JSON.stringify(
+  document.cookie.split('; ').map(c => {
+    const eq = c.indexOf('=');
+    return { name: c.slice(0, eq), value: c.slice(eq + 1) };
+  })
+));
+console.log('Cookie 已复制到剪贴板！回到管理页面粘贴。');</pre>
+    <button onclick="copyConsoleScript()" class="btn btn-primary">复制脚本</button>
+
+    <h3>粘贴 Cookie 数据</h3>
+    <textarea id="cookie-data" rows="8" placeholder="粘贴从 Console 复制的内容..."></textarea>
+    <br>
+    <button onclick="uploadCookie()" class="btn btn-primary">保存 Cookie</button>
+    <span id="cookie-save-status" class="status-inline"></span>
+</div>
+
+<div id="tab-string" class="tab-content">
+    <h3>从浏览器 DevTools 复制 Cookie 字符串</h3>
+    <p>在 Yamibo 网站任意页面地址栏前点击锁图标 → Cookie → 选择任一项 → 复制 "Cookie" 请求头值。或者：F12 → Application → Cookies → 导出时会得到类似的字符串。</p>
+    <textarea id="cookie-string" rows="6" placeholder="discuz_uid=12345; discuz_pw=abcde; ..."></textarea>
+    <br>
+    <button onclick="uploadCookieString()" class="btn btn-primary">保存 Cookie 字符串</button>
+    <span id="cookie-string-status" class="status-inline"></span>
+</div>
+
+<div id="tab-json" class="tab-content">
+    <h3>粘贴 JSON 格式 Cookie</h3>
+    <textarea id="cookie-json" rows="10" placeholder='[{"name":"discuz_uid","value":"12345"},{"name":"discuz_pw","value":"abcde"}]'></textarea>
+    <br>
+    <button onclick="uploadCookieJson()" class="btn btn-primary">保存 Cookie JSON</button>
+    <span id="cookie-json-status" class="status-inline"></span>
+</div>
+
+<h2>验证</h2>
+<button onclick="verifyCookie()" class="btn">检测 Cookie 有效性</button>
+<span id="verify-status" class="status-inline"></span>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCookieStatus() {
+    const r = await fetch("/api/v1/admin/cookie/status");
+    const d = await r.json();
+    document.getElementById("cookie-status-card").innerHTML = `
+        <table>
+            <tr><td>文件存在</td><td>${d.exists ? "是" : "否"}</td></tr>
+            <tr><td>关键 Cookie</td><td>${d.key_cookies.join(", ") || "无"}</td></tr>
+            <tr><td>格式有效</td><td>${d.valid ? "是（discuz_uid 非零）" : "可能未登录"}</td></tr>
+        </table>
+    `;
+}
+
+function switchTab(id) {
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    event.target.classList.add("active");
+}
+
+function copyConsoleScript() {
+    const txt = document.getElementById("console-script").textContent;
+    navigator.clipboard.writeText(txt).then(() => {
+        alert("脚本已复制！请到 Yamibo 网站的 Console 中粘贴运行。");
+    });
+}
+
+async function uploadCookie(data) {
+    const r = await fetch("/api/v1/admin/cookie/upload", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({data}),
+    });
+    const d = await r.json();
+    const badge = document.getElementById("cookie-save-status");
+    badge.textContent = r.ok ? `已保存 (${d.cookie_count} 个, 有效: ${d.valid ? "是" : "否"})` : (d.detail || "失败");
+    badge.className = "status-inline " + (r.ok ? "success" : "error");
+    loadCookieStatus();
+}
+
+async function uploadCookie() {
+    const data = document.getElementById("cookie-data").value.trim();
+    if (!data) return alert("请先粘贴数据");
+    await uploadCookie(data);
+}
+
+async function uploadCookieString() {
+    const raw = document.getElementById("cookie-string").value.trim();
+    if (!raw) return alert("请先粘贴 Cookie 字符串");
+    await uploadCookie(raw);
+}
+
+async function uploadCookieJson() {
+    const raw = document.getElementById("cookie-json").value.trim();
+    if (!raw) return alert("请先粘贴 JSON");
+    await uploadCookie(raw);
+}
+
+async function verifyCookie() {
+    const badge = document.getElementById("verify-status");
+    badge.textContent = "正在验证...";
+    badge.className = "status-inline";
+    const r = await fetch("/api/v1/admin/cookie/verify", {method: "POST"});
+    const d = await r.json();
+    badge.textContent = d.valid ? "Cookie 有效，已登录" : "Cookie 无效或已过期";
+    badge.className = "status-inline " + (d.valid ? "success" : "error");
+    loadCookieStatus();
+}
+
+loadCookieStatus();
+</script>
+{% endblock %}

@@ -85,3 +85,48 @@ async def fetch_chapter_content(
 async def fetch_first_post(client: httpx.AsyncClient, tid: str) -> str:
     """抓取帖子首页"""
     return await fetch_thread_page(client, tid, page=1)
+
+
+def parse_cookie_string(raw: str) -> list[dict]:
+    """解析 Cookie 字符串为 JSON 数组
+
+    支持两种输入：
+      1. name1=value1; name2=value2（浏览器 DevTools 复制）
+      2. [{"name":"x","value":"y"},...]（JSON 数组）
+    """
+    raw = raw.strip()
+    if raw.startswith("["):
+        return json.loads(raw)
+
+    cookies = []
+    for pair in raw.split(";"):
+        pair = pair.strip()
+        if not pair or "=" not in pair:
+            continue
+        name, _, value = pair.partition("=")
+        cookies.append({"name": name.strip(), "value": value.strip()})
+    return cookies
+
+
+def read_cookie_status() -> dict:
+    """读取 Cookie 文件状态"""
+    if not COOKIE_PATH.exists():
+        return {"exists": False, "valid": False, "cookies": []}
+    try:
+        data = json.loads(COOKIE_PATH.read_text("utf-8"))
+        cookies = {c["name"]: c["value"] for c in data}
+        valid = cookies.get("discuz_uid", "0") != "0"
+        return {"exists": True, "valid": valid, "cookie_count": len(cookies)}
+    except Exception:
+        return {"exists": True, "valid": False, "cookie_count": 0}
+
+
+async def verify_cookie() -> dict:
+    """用 Cookie 访问论坛验证有效性"""
+    try:
+        async with yamibo_client() as client:
+            r = await client.get(LOGIN_CHECK_URL)
+            logged_in = "文學區" in r.text
+            return {"valid": logged_in, "checked": True}
+    except Exception as e:
+        return {"valid": False, "checked": True, "error": str(e)}

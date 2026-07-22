@@ -31,3 +31,4 @@ class ServerConfig(BaseModel):
     """全局服务配置"""
     ai: AIProviderConfig = AIProviderConfig()
     poll_interval_minutes: int = 30
+    poll_enabled: bool = True

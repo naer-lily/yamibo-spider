@@ -1,0 +1,16 @@
+services:
+  yamibo-spider:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./db:/app/db
+      - ./cookies.json:/app/cookies.json
+    environment:
+      - AI_PROVIDER=deepseek
+      - AI_MODEL=deepseek-chat
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-}
+      - POLL_INTERVAL=30
+      - POLL_ENABLED=1
+    restart: unless-stopped

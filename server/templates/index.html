@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - Yamibo Spider{% endblock %}
+
+{% block content %}
+<h1>仪表盘</h1>
+
+<div class="cards" id="dashboard-cards">
+    <div class="card">
+        <h3>已收藏书目</h3>
+        <p class="card-value" id="stat-book-count">—</p>
+    </div>
+    <div class="card">
+        <h3>轮询状态</h3>
+        <p class="card-value" id="stat-poll-status">—</p>
+    </div>
+    <div class="card">
+        <h3>Cookie 状态</h3>
+        <p class="card-value" id="stat-cookie-status">—</p>
+    </div>
+    <div class="card">
+        <h3>下次轮询</h3>
+        <p class="card-value" id="stat-next-poll">—</p>
+    </div>
+</div>
+
+<h2>策略分布</h2>
+<div id="strategy-breakdown" class="strategy-list"></div>
+
+<h2>轮询详情</h2>
+<table>
+    <tr><td>状态</td><td id="detail-poll-running">—</td></tr>
+    <tr><td>轮询间隔</td><td id="detail-poll-interval">—</td></tr>
+    <tr><td>上次执行</td><td id="detail-poll-last">—</td></tr>
+    <tr><td>下次执行</td><td id="detail-poll-next">—</td></tr>
+    <tr><td>活跃书目数</td><td id="detail-active-books">—</td></tr>
+</table>
+
+<h2>LNReader 连接</h2>
+<div class="card" style="max-width:600px">
+    <p>在 LNReader App 中添加此服务器为书源：</p>
+    <div class="copy-row">
+        <code id="repo-url">—</code>
+        <button onclick="copyRepoUrl()" class="btn btn-sm">复制</button>
+    </div>
+    <ol style="margin-top:8px;font-size:0.85rem;color:var(--text-muted);padding-left:18px;">
+        <li>打开 LNReader → 设置 → 仓库 → 添加仓库</li>
+        <li>粘贴上方链接</li>
+        <li>到插件页安装 "Yamibo (百合会)"</li>
+        <li>插件设置中将 Backend URL 设为本服务器地址</li>
+    </ol>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    const r = await fetch("/api/v1/admin/status");
+    const d = await r.json();
+
+    document.getElementById("stat-book-count").textContent = d.book_count;
+    document.getElementById("stat-poll-status").textContent = d.poll.running ? "运行中" : "已停止";
+    document.getElementById("stat-cookie-status").textContent = d.cookie.valid ? "有效" : (d.cookie.exists ? "无效" : "未配置");
+    document.getElementById("stat-next-poll").textContent = d.poll.next_run ? new Date(d.poll.next_run).toLocaleString() : "—";
+
+    const breakdown = document.getElementById("strategy-breakdown");
+    breakdown.innerHTML = Object.entries(d.strategy_counts).map(([k, v]) =>
+        `<span class="tag">${k}: ${v}</span>`
+    ).join("") || "<em>暂无数据</em>";
+
+    document.getElementById("detail-poll-running").textContent = d.poll.running ? "运行中" : "已停止";
+    document.getElementById("detail-poll-interval").textContent = d.poll.interval_minutes + " 分钟";
+    document.getElementById("detail-poll-last").textContent = d.poll.last_run ? new Date(d.poll.last_run).toLocaleString() : "从未";
+    document.getElementById("detail-poll-next").textContent = d.poll.next_run ? new Date(d.poll.next_run).toLocaleString() : "—";
+    document.getElementById("detail-active-books").textContent = d.book_count;
+}
+
+function copyRepoUrl() {
+    const el = document.getElementById("repo-url");
+    navigator.clipboard.writeText(el.textContent).then(() => {
+        const btn = event.target;
+        btn.textContent = "已复制";
+        setTimeout(() => btn.textContent = "复制", 1500);
+    });
+}
+
+document.getElementById("repo-url").textContent = location.origin + "/static/plugins.json";
+loadDashboard();
+setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}
