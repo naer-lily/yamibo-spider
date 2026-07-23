@@ -70,7 +70,7 @@ async def get_plugin_manifest(request: Request):
         "id": "yamibo",
         "name": "Yamibo (百合会)",
         "site": "https://bbs.yamibo.com",
-        "lang": "中文",
+        "lang": "中文, 汉语, 漢語",
         "version": "1.0.0",
         "url": f"{base}/static/yamibo.js",
         "iconUrl": "https://bbs.yamibo.com/static/image/common/logo.png",
