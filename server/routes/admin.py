@@ -259,3 +259,20 @@ async def run_poll_now():
     import asyncio
     asyncio.create_task(poll_all())
     return {"status": "ok", "message": "轮询已在后台启动"}
+
+
+# ═══════════════════════════════════════════
+#  API — 论坛搜索（管理后台用）
+# ═══════════════════════════════════════════
+
+@router.get("/api/v1/admin/search-forum")
+async def search_forum(q: str = ""):
+    """在 yamibo 论坛译文区搜索帖子"""
+    if not q:
+        return []
+    try:
+        from server.yamibo.search import search_posts
+        items, _ = await search_posts(q, page=1)
+        return items
+    except Exception as e:
+        raise HTTPException(500, f"搜索失败: {e}")

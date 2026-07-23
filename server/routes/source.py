@@ -3,6 +3,7 @@
 import httpx
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 
 from server.yamibo.client import yamibo_client, fetch_first_post, fetch_chapter_content
 from server.yamibo.parser import extract_author_uid, clean_post_html, extract_posts, extract_pid_links
@@ -23,9 +24,12 @@ def get_config(request: Request) -> ServerConfig:
 @router.get("/popular")
 async def popular_novels(page: int = 1):
     items = await list_books()
+    per_page = 20
+    start = (page - 1) * per_page
+    chunk = items[start:start + per_page]
     return [
         {"path": f"yamibo/{item.tid}", "name": item.title, "cover": ""}
-        for item in items
+        for item in chunk
     ]
 
 
@@ -40,9 +44,11 @@ async def search_novels(q: str = "", page: int = 1):
         item for item in items
         if q_lower in item.title.lower() or q_lower in item.tid
     ]
+    per_page = 20
+    start = (page - 1) * per_page
     return [
         {"path": f"yamibo/{item.tid}", "name": item.title, "cover": ""}
-        for item in matched
+        for item in matched[start:start + per_page]
     ]
 
 
@@ -117,4 +123,4 @@ async def parse_chapter(tid: str, pid: str):
         content = await fetch_chapter_content(client, tid, pid)
         if content is None:
             raise HTTPException(404, f"未找到楼层 pid={pid}")
-        return clean_post_html(content)
+        return Response(content=clean_post_html(content), media_type="text/html")

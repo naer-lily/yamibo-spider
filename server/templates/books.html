@@ -7,13 +7,30 @@
 <div class="toolbar">
     <form id="add-form" onsubmit="addBook(event)">
         <input type="text" id="add-tid" placeholder="帖子 TID（如 557701）" required>
-        <button type="submit" class="btn btn-primary">添加书目</button>
+        <button type="submit" class="btn btn-primary">添加</button>
     </form>
-    <input type="text" id="search-input" placeholder="搜索已收藏书目..." oninput="filterBooks()">
+    <input type="text" id="search-input" placeholder="筛选已收藏书目..." oninput="filterBooks()">
 </div>
 
 <div id="add-status" class="status-msg" style="display:none"></div>
 
+<h2>论坛搜索</h2>
+<div class="toolbar">
+    <input type="text" id="forum-search" placeholder="在译文区搜索帖子标题..." onkeydown="if(event.key==='Enter')searchForum()">
+    <button onclick="searchForum()" class="btn btn-primary">搜索论坛</button>
+    <span id="forum-search-status" class="status-inline"></span>
+</div>
+<div id="forum-results" style="display:none">
+    <h3>搜索结果</h3>
+    <table>
+        <thead>
+            <tr><th>TID</th><th>标题</th><th>操作</th></tr>
+        </thead>
+        <tbody id="forum-tbody"></tbody>
+    </table>
+</div>
+
+<h2>已收藏书目</h2>
 <table id="book-table">
     <thead>
         <tr>
@@ -40,11 +57,15 @@
 {% block scripts %}
 <script>
 let allBooks = [];
+let addedTids = new Set();
 
 async function loadBooks() {
     const r = await fetch("/api/v1/admin/books");
     allBooks = await r.json();
+    addedTids = new Set(allBooks.map(b => b.tid));
     renderBooks(allBooks);
+    // 刷新搜索结果中的状态
+    renderForumResults();
 }
 
 function renderBooks(books) {
@@ -75,9 +96,14 @@ function filterBooks() {
 async function addBook(e) {
     e.preventDefault();
     const tid = document.getElementById("add-tid").value.trim();
+    await addBookByTid(tid);
+    document.getElementById("add-tid").value = "";
+}
+
+async function addBookByTid(tid) {
     const status = document.getElementById("add-status");
     status.style.display = "block";
-    status.textContent = "正在添加...";
+    status.textContent = "正在添加 " + tid + " ...";
     try {
         const r = await fetch("/api/v1/library/add", {
             method: "POST",
@@ -86,9 +112,8 @@ async function addBook(e) {
         });
         const data = await r.json();
         if (r.ok) {
-            status.textContent = data.status === "exists" ? "书目已存在" : `已添加: ${data.title}`;
+            status.textContent = data.status === "exists" ? `${tid} 已存在` : `已添加: ${data.title}`;
             status.className = "status-msg success";
-            document.getElementById("add-tid").value = "";
             loadBooks();
         } else {
             status.textContent = data.detail || "添加失败";
@@ -98,6 +123,54 @@ async function addBook(e) {
         status.textContent = "网络错误";
         status.className = "status-msg error";
     }
+}
+
+// ── 论坛搜索 ──
+
+let forumResults = [];
+
+async function searchForum() {
+    const q = document.getElementById("forum-search").value.trim();
+    if (!q) return;
+    const status = document.getElementById("forum-search-status");
+    status.textContent = "搜索中...";
+    status.className = "status-inline";
+    try {
+        const r = await fetch(`/api/v1/admin/search-forum?q=${encodeURIComponent(q)}`);
+        forumResults = await r.json();
+        status.textContent = `找到 ${forumResults.length} 条结果`;
+        status.className = "status-inline success";
+        renderForumResults();
+    } catch(e) {
+        status.textContent = "搜索失败";
+        status.className = "status-inline error";
+    }
+}
+
+function renderForumResults() {
+    const container = document.getElementById("forum-results");
+    const tbody = document.getElementById("forum-tbody");
+    if (forumResults.length === 0) {
+        container.style.display = "none";
+        return;
+    }
+    container.style.display = "block";
+    tbody.innerHTML = forumResults.map(item => {
+        const tid = item.path.replace("yamibo/", "");
+        const isAdded = addedTids.has(tid);
+        return `
+            <tr>
+                <td>${tid}</td>
+                <td><strong>${esc(item.name)}</strong></td>
+                <td>
+                    ${isAdded
+                        ? '<span class="tag" style="background:#d4edda;color:#155724">已收藏</span>'
+                        : `<button onclick="addBookByTid('${tid}')" class="btn btn-sm btn-primary">添加到书库</button>`
+                    }
+                </td>
+            </tr>
+        `;
+    }).join("");
 }
 
 async function refreshBook(tid) {
