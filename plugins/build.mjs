@@ -6,6 +6,7 @@ await esbuild.build({
   platform: "neutral",
   format: "cjs",
   target: "es2020",
+  footer: { js: "if (exports !== module.exports) Object.assign(exports, module.exports);" },
   outfile: "../server/static/yamibo.js",
   external: [
     "@/types/plugin",

@@ -64,3 +64,4 @@ var YamiboPlugin = class {
   }
 };
 var yamibo_default = new YamiboPlugin();
+if (exports !== module.exports) Object.assign(exports, module.exports);
