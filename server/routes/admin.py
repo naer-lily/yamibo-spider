@@ -60,6 +60,24 @@ async def admin_cookie_page(request: Request):
 
 
 # ═══════════════════════════════════════════
+#  LNReader 插件清单（动态生成，含绝对 URL）
+# ═══════════════════════════════════════════
+
+@router.get("/static/plugins.json")
+async def get_plugin_manifest(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return [{
+        "id": "yamibo",
+        "name": "Yamibo (百合会)",
+        "site": "https://bbs.yamibo.com",
+        "lang": "中文",
+        "version": "1.0.0",
+        "url": f"{base}/static/yamibo.js",
+        "iconUrl": "https://bbs.yamibo.com/static/image/common/logo.png",
+    }]
+
+
+# ═══════════════════════════════════════════
 #  API — 仪表盘状态
 # ═══════════════════════════════════════════
 
