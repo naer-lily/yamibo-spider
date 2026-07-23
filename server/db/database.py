@@ -234,9 +234,13 @@ async def get_strategy_counts() -> dict[str, int]:
 
 
 async def check_cookie_status() -> CookieStatus:
-    """异步检测 Cookie 文件是否存在及其关键字段"""
+    """异步检测 Cookie 文件是否存在及其关键字段
+
+    Discuz! X3.5 使用动态前缀命名（如 EeqY_2132_），无 discuz_uid 固定名。
+    关键字段：_auth（认证令牌）、_saltkey（CSRF 盐）、_member_login_status（登录态）。
+    """
     from server.config import COOKIE_PATH
-    import json
+    import json, re
 
     if not COOKIE_PATH.exists():
         return CookieStatus(exists=False, valid=False, key_cookies=[])
@@ -244,9 +248,24 @@ async def check_cookie_status() -> CookieStatus:
     try:
         raw = json.loads(COOKIE_PATH.read_text("utf-8"))
         cookies = {c["name"]: c["value"] for c in raw if c.get("name")}
-        key_names = ["discuz_uid", "discuz_pw", "discuz_sid"]
-        key_cookies = [n for n in key_names if n in cookies]
-        valid = "discuz_uid" in cookies and cookies.get("discuz_uid", "0") != "0"
+
+        # Discuz! X3.5 动态前缀匹配
+        has_auth = any(k.endswith("_auth") for k in cookies)
+        has_saltkey = any(k.endswith("_saltkey") for k in cookies)
+        has_sid = any(k.endswith("_sid") for k in cookies)
+        has_login_status = any(
+            k.endswith("_member_login_status") and v == "1"
+            for k, v in cookies.items()
+        )
+
+        key_cookies = []
+        if has_auth: key_cookies.append("_auth")
+        if has_saltkey: key_cookies.append("_saltkey")
+        if has_sid: key_cookies.append("_sid")
+        if has_login_status: key_cookies.append("_member_login_status")
+
+        # 有效 = 有 auth 令牌 且 登录态为 1
+        valid = has_auth and has_login_status
         return CookieStatus(exists=True, valid=valid, key_cookies=key_cookies)
     except Exception:
         return CookieStatus(exists=True, valid=False, key_cookies=[])
