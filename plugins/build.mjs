@@ -1,22 +1,10 @@
-import * as esbuild from "esbuild";
+import { copyFileSync } from "fs";
 
-await esbuild.build({
-  entryPoints: ["chinese/yamibo.ts"],
-  bundle: true,
-  platform: "neutral",
-  format: "cjs",
-  target: "es2020",
-  footer: { js: "if (exports !== module.exports) Object.assign(exports, module.exports);" },
-  outfile: "../server/static/yamibo.js",
-  external: [
-    "@/types/plugin",
-    "@/libs/*",
-    "cheerio",
-    "htmlparser2",
-    "dayjs",
-    "urlencode",
-    "@libs/*",
-  ],
-});
+copyFileSync(
+  "../server/static/yamibo.js",
+  "chinese/yamibo.js"
+);
 
-console.log("yamibo.js → server/static/yamibo.js 构建完成");
+console.log("yamibo.js → plugins/chinese/yamibo.js 同步完成");
+console.log("注意: 源文件是 server/static/yamibo.js（手写 JS）");
+
