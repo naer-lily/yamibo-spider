@@ -2,7 +2,7 @@
 // 薄代理层 — 所有数据通过 Python 后端 REST API 获取
 // 直接在 LNReader 沙箱中运行，使用 require() 获取内置模块
 
-var storage = require("@/libs/storage").storage;
+var storage = require("@libs/storage").storage;
 
 function YamiboPlugin() {
   this.id = "yamibo";
