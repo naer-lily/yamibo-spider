@@ -93,28 +93,23 @@ def _parse_total_pages(html: str) -> int:
 def _parse_search_results(html: str) -> list[dict]:
     """解析搜索结果 HTML 为 NovelItem 列表
 
-    Discuz! 搜索结果通常包含 <div id="threadlist"> 或搜索专用的结果容器。
+    Discuz! 搜索结果中，每条结果是一个 li.pbw，其 h3 内包含链接。
+    链接格式有两种：forum.php?mod=viewthread&tid=XXX 或 thread-XXX-1-1.html
     """
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "lxml")
     items = []
 
-    for li in soup.select("li.pbw, li"):
-        link = li.select_one('a.xst, a[href*="thread-"]')
+    for li in soup.select("li.pbw"):
+        link = li.select_one('h3 a, a[href*="tid="], a[href*="thread-"]')
         if not link:
             continue
-        title = link.get_text(strip=True)
+        title = link.get_text(" ", strip=True)
         href = str(link.get("href", ""))
-        m = re.search(r"thread-(\d+)-", href)
-        if not m:
+        tid = _extract_tid(href)
+        if not tid or not title:
             continue
-        tid = m.group(1)
-        if not title:
-            continue
-
-        author_el = li.select_one("cite a, .auth")
-        author = author_el.get_text(strip=True) if author_el else "未知"
 
         items.append({
             "path": f"yamibo/{tid}",
@@ -122,20 +117,13 @@ def _parse_search_results(html: str) -> list[dict]:
             "cover": "",
         })
 
-    if not items:
-        for item in soup.select('.xst, a[href*="thread-"]'):
-            title = item.get_text(strip=True)
-            href = str(item.get("href", ""))
-            m = re.search(r"thread-(\d+)-", href)
-            if not m or not title:
-                continue
-            if title in {"搜索", "下一页", "上一页"}:
-                continue
-            tid = m.group(1)
-            items.append({
-                "path": f"yamibo/{tid}",
-                "name": title,
-                "cover": "",
-            })
-
     return items
+
+
+def _extract_tid(href: str) -> str | None:
+    """从链接中提取帖子 tid，支持两种格式"""
+    m = re.search(r"tid=(\d+)", href)
+    if m:
+        return m.group(1)
+    m = re.search(r"thread-(\d+)-", href)
+    return m.group(1) if m else None

@@ -31,15 +31,19 @@ async def popular_novels(page: int = 1):
 
 @router.get("/search")
 async def search_novels(q: str = "", page: int = 1):
-    """搜索译文区内的帖子"""
+    """在已收藏书目中搜索"""
     if not q:
         return []
-    try:
-        from server.yamibo.search import search_posts
-        items, total_pages = await search_posts(q, page)
-        return items
-    except Exception as e:
-        raise HTTPException(500, f"搜索失败: {e}")
+    items = await list_books()
+    q_lower = q.lower()
+    matched = [
+        item for item in items
+        if q_lower in item.title.lower() or q_lower in item.tid
+    ]
+    return [
+        {"path": f"yamibo/{item.tid}", "name": item.title, "cover": ""}
+        for item in matched
+    ]
 
 
 @router.get("/novel/yamibo/{tid}")
