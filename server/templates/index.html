@@ -83,7 +83,7 @@ function copyRepoUrl() {
     });
 }
 
-document.getElementById("repo-url").textContent = location.origin + "/static/plugins.json";
+document.getElementById("repo-url").textContent = location.origin + "/static/plugins.min.json";
 loadDashboard();
 setInterval(loadDashboard, 30000);
 </script>

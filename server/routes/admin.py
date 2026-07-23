@@ -63,7 +63,7 @@ async def admin_cookie_page(request: Request):
 #  LNReader 插件清单（动态生成，含绝对 URL）
 # ═══════════════════════════════════════════
 
-@router.get("/static/plugins.json")
+@router.get("/static/plugins.min.json")
 async def get_plugin_manifest(request: Request):
     base = str(request.base_url).rstrip("/")
     return [{
