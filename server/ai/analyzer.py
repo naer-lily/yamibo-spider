@@ -20,6 +20,7 @@ class AnalysisState:
     strategy: str | None = None
     exclude_patterns: list[str] = field(default_factory=list)
     title_regex: str | None = None
+    is_completed: bool | None = None
 
 
 SYSTEM_PROMPT = dedent("""\
@@ -29,6 +30,7 @@ SYSTEM_PROMPT = dedent("""\
 调用顺序：
 1. set_meta — 记录作品的元信息
 2. set_strategy — 判断目录格式类型
+3. set_status — 判断作品是否已完结
 
 目录策略说明：
 - "pid_links": 首楼正文中有 <a href="...pid=XXXXX">章节名</a> 格式的可点击链接
@@ -37,6 +39,9 @@ SYSTEM_PROMPT = dedent("""\
 
 如果策略是 pid_links，provide exclude_patterns 列出正文中会出现的干扰文本（如"发消息"、"使用道具"）。
 如果策略是 author_posts，provide title_regex 用于匹配章节标题（如 r'第(\\d+)话'）。
+
+完结合约判断：如果首楼明确写了"已完结"、"正文已完结"、"完結"、"FIN"等声明，
+或标题含有"【完】"标记，则 set completed=True。否则 set completed=False。
 
 完成后简短总结你的发现。
 """)
@@ -101,6 +106,19 @@ def create_analyzer(cfg: AIProviderConfig):  # type: ignore[return-type]
         ctx.deps.title_regex = title_regex or None
         return f"已设置策略: {strategy}"
 
+    @agent.tool
+    async def set_status(
+        ctx: RunContext[AnalysisState],
+        completed: bool,
+    ) -> str:
+        """设置作品完结状态。
+
+        Args:
+            completed: True 表示已完结，False 表示连载中
+        """
+        ctx.deps.is_completed = completed
+        return f"已记录完结状态: {'已完结' if completed else '连载中'}"
+
     return agent
 
 
@@ -109,8 +127,8 @@ async def analyze_first_post(
     tid: str,
     author_uid: str,
     cfg: AIProviderConfig,
-) -> tuple[BookMeta, TocStrategy, list[str], str | None]:
-    """分析帖子首页，返回 (元信息, 策略, exclude_patterns, title_regex)
+) -> tuple[BookMeta, TocStrategy, list[str], str | None, bool]:
+    """分析帖子首页，返回 (元信息, 策略, exclude_patterns, title_regex, is_completed)
 
     注意：章节列表不由此函数返回，由程序从 .t_f 提取。
     """
@@ -123,9 +141,13 @@ async def analyze_first_post(
     if not state.strategy:
         raise ValueError("AI 未能识别目录策略")
 
+    if state.is_completed:
+        state.meta.status = "completed"
+
     return (
         state.meta,
         TocStrategy(state.strategy),
         state.exclude_patterns,
         state.title_regex,
+        state.is_completed or False,
     )

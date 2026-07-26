@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS books (
     description TEXT DEFAULT '',
     cover_url TEXT,
     tags TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'ongoing',
+    t2s_enabled INTEGER DEFAULT 0,
     strategy TEXT NOT NULL,
     exclude_patterns TEXT DEFAULT '[]',
     title_regex TEXT,
@@ -44,6 +46,15 @@ async def get_db() -> aiosqlite.Connection:
     db = await aiosqlite.connect(str(DB_PATH))
     db.row_factory = aiosqlite.Row
     await db.executescript(SCHEMA)
+    # 迁移：旧表补充新字段
+    try:
+        await db.execute("ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'ongoing'")
+    except aiosqlite.OperationalError:
+        pass
+    try:
+        await db.execute("ALTER TABLE books ADD COLUMN t2s_enabled INTEGER DEFAULT 0")
+    except aiosqlite.OperationalError:
+        pass
     await db.commit()
     return db
 
@@ -64,9 +75,10 @@ async def save_book(config: BookConfig):
     await db.execute("""
         INSERT OR REPLACE INTO books (tid, title, author, author_uid,
             jp_title, description, cover_url, tags,
+            status, t2s_enabled,
             strategy, exclude_patterns, title_regex,
             created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         config.tid,
         config.meta.cn_title,
@@ -76,6 +88,8 @@ async def save_book(config: BookConfig):
         config.meta.description,
         config.meta.cover_url,
         json.dumps(config.meta.tags, ensure_ascii=False),
+        config.meta.status,
+        1 if config.meta.t2s_enabled else 0,
         config.chapter_pattern.strategy.value,
         json.dumps(config.chapter_pattern.exclude_patterns, ensure_ascii=False),
         config.chapter_pattern.title_regex,
@@ -127,6 +141,8 @@ async def load_book_config(tid: str) -> BookConfig | None:
             description=book["description"],
             cover_url=book["cover_url"],
             tags=json.loads(book["tags"]) if book["tags"] else [],
+            status=book["status"] or "ongoing",
+            t2s_enabled=bool(book["t2s_enabled"]),
         ),
         chapters=chapters,
         chapter_pattern=ChapterPattern(
@@ -231,6 +247,37 @@ async def get_strategy_counts() -> dict[str, int]:
     result = {r["strategy"]: r["cnt"] for r in await rows.fetchall()}
     await db.close()
     return result
+
+
+async def update_book_config(tid: str, meta: BookMeta) -> bool:
+    """更新书目的元信息（标题、作者、状态、t2s等）"""
+    db = await get_db()
+    await db.execute("""
+        UPDATE books SET title=?, author=?, jp_title=?, description=?,
+            cover_url=?, tags=?, status=?, t2s_enabled=?, updated_at=datetime('now')
+        WHERE tid=?
+    """, (
+        meta.cn_title, meta.author, meta.jp_title, meta.description,
+        meta.cover_url, json.dumps(meta.tags, ensure_ascii=False),
+        meta.status, 1 if meta.t2s_enabled else 0, tid,
+    ))
+    changed = db.total_changes > 0
+    await db.commit()
+    await db.close()
+    return changed
+
+
+async def update_book_status(tid: str, status: str) -> bool:
+    """快捷更新完结状态"""
+    db = await get_db()
+    await db.execute(
+        "UPDATE books SET status=?, updated_at=datetime('now') WHERE tid=?",
+        (status, tid),
+    )
+    changed = db.total_changes > 0
+    await db.commit()
+    await db.close()
+    return changed
 
 
 async def check_cookie_status() -> CookieStatus:

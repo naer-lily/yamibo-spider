@@ -31,4 +31,4 @@ class ServerConfig(BaseModel):
     """全局服务配置"""
     ai: AIProviderConfig = AIProviderConfig()
     poll_interval_minutes: int = 30
-    poll_enabled: bool = True
+    poll_enabled: bool = False  # 默认关闭，依赖 LNReader 客户端刷新

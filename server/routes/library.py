@@ -39,7 +39,7 @@ async def add_book(req: AddBookRequest, request: Request):
         # AI 提取元信息 + 策略
         first_post = extract_posts(html)
         first_tf = first_post[0][1] if first_post else html
-        meta, strategy, exclude_patterns, title_regex = await analyze_first_post(
+        meta, strategy, exclude_patterns, title_regex, _ = await analyze_first_post(
             first_tf, req.tid, author_uid, cfg.ai,
         )
 

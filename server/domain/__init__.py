@@ -20,6 +20,8 @@ class BookMeta(BaseModel):
     description: str = Field(description="作品简介")
     cover_url: str | None = Field(default=None, description="封面图片URL")
     tags: list[str] = Field(default_factory=list, description="标签列表")
+    status: str = Field(default="ongoing", description="连载状态: ongoing/completed")
+    t2s_enabled: bool = Field(default=False, description="是否启用繁转简")
 
 
 class Chapter(BaseModel):

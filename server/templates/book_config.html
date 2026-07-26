@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}书目配置 - {{ tid }}{% endblock %}
+
+{% block content %}
+<h1>书目配置 <code>{{ tid }}</code></h1>
+<div id="config-status" class="status-msg" style="display:none"></div>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('tab-meta')">元信息</button>
+    <button class="tab-btn" onclick="switchTab('tab-chapters')">章节</button>
+    <button class="tab-btn" onclick="switchTab('tab-advanced')">高级</button>
+</div>
+
+<div id="tab-meta" class="tab-content active">
+    <form id="meta-form" onsubmit="saveMeta(event)">
+        <div class="form-group">
+            <label>TID</label>
+            <input type="text" id="meta-tid" disabled>
+        </div>
+        <div class="form-group">
+            <label>中文标题</label>
+            <input type="text" id="meta-cn-title">
+        </div>
+        <div class="form-group">
+            <label>日文原名</label>
+            <input type="text" id="meta-jp-title">
+        </div>
+        <div class="form-group">
+            <label>作者</label>
+            <input type="text" id="meta-author">
+        </div>
+        <div class="form-group">
+            <label>简介</label>
+            <textarea id="meta-description" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+            <label>封面 URL</label>
+            <input type="text" id="meta-cover-url">
+        </div>
+        <div class="form-group">
+            <label>标签（逗号分隔）</label>
+            <input type="text" id="meta-tags">
+        </div>
+
+        <div class="inline-form">
+            <label>连载状态</label>
+            <select id="meta-status">
+                <option value="ongoing">连载中</option>
+                <option value="completed">已完结</option>
+            </select>
+        </div>
+        <div class="inline-form">
+            <label>繁转简</label>
+            <input type="checkbox" id="meta-t2s">
+        </div>
+
+        <button type="submit" class="btn btn-primary">保存</button>
+        <button type="button" class="btn" onclick="checkCompleted()">AI 检测完结</button>
+        <span id="meta-save-status" class="status-inline"></span>
+    </form>
+</div>
+
+<div id="tab-chapters" class="tab-content">
+    <div id="chapter-list"></div>
+</div>
+
+<div id="tab-advanced" class="tab-content">
+    <h3>解析参数</h3>
+    <table id="advanced-info">
+        <tr><td>策略</td><td id="adv-strategy">—</td></tr>
+        <tr><td>排除模式</td><td id="adv-exclude">—</td></tr>
+        <tr><td>标题正则</td><td id="adv-regex">—</td></tr>
+    </table>
+    <button onclick="refreshBook()" class="btn">刷新章节</button>
+    <span id="refresh-status" class="status-inline"></span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const tid = "{{ tid }}";
+
+function switchTab(id) {
+    document.querySelectorAll(".tab-content").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.getElementById(id).classList.add("active");
+    event.target.classList.add("active");
+}
+
+async function loadConfig() {
+    const r = await fetch(`/api/v1/admin/books/${tid}/config`);
+    const d = await r.json();
+    document.getElementById("meta-tid").value = d.tid;
+    document.getElementById("meta-cn-title").value = d.cn_title;
+    document.getElementById("meta-jp-title").value = d.jp_title;
+    document.getElementById("meta-author").value = d.author;
+    document.getElementById("meta-description").value = d.description;
+    document.getElementById("meta-cover-url").value = d.cover_url || "";
+    document.getElementById("meta-tags").value = (d.tags || []).join(", ");
+    document.getElementById("meta-status").value = d.status;
+    document.getElementById("meta-t2s").checked = d.t2s_enabled;
+
+    document.getElementById("adv-strategy").textContent = d.strategy;
+    document.getElementById("adv-exclude").textContent = (d.exclude_patterns || []).join(", ") || "无";
+    document.getElementById("adv-regex").textContent = d.title_regex || "无";
+
+    loadChapters();
+}
+
+async function loadChapters() {
+    const r = await fetch(`/api/v1/admin/books/${tid}/chapters`);
+    const chapters = await r.json();
+    document.getElementById("chapter-list").innerHTML = chapters.length
+        ? `<p>共 ${chapters.length} 章</p>` +
+          chapters.map(c => `<p>${c.index}. ${esc(c.title)} <code>pid=${c.pid}</code> vol=${c.volume}</p>`).join("")
+        : "<p><em>暂无章节</em></p>";
+}
+
+function esc(s) {
+    const el = document.createElement("span");
+    el.textContent = s;
+    return el.innerHTML;
+}
+
+async function saveMeta(e) {
+    e.preventDefault();
+    const tagsStr = document.getElementById("meta-tags").value;
+    const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const body = {
+        cn_title: document.getElementById("meta-cn-title").value,
+        jp_title: document.getElementById("meta-jp-title").value,
+        author: document.getElementById("meta-author").value,
+        description: document.getElementById("meta-description").value,
+        cover_url: document.getElementById("meta-cover-url").value || null,
+        tags: tags,
+        status: document.getElementById("meta-status").value,
+        t2s_enabled: document.getElementById("meta-t2s").checked,
+    };
+    const r = await fetch(`/api/v1/admin/books/${tid}/config`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+    });
+    const badge = document.getElementById("meta-save-status");
+    badge.textContent = r.ok ? "已保存" : "保存失败";
+    badge.className = "status-inline " + (r.ok ? "success" : "error");
+}
+
+async function checkCompleted() {
+    const badge = document.getElementById("meta-save-status");
+    badge.textContent = "AI 检测中...";
+    badge.className = "status-inline";
+    try {
+        const r = await fetch(`/api/v1/admin/books/${tid}/check-completed`, {method: "POST"});
+        const d = await r.json();
+        document.getElementById("meta-status").value = d.is_completed ? "completed" : "ongoing";
+        badge.textContent = d.is_completed ? "AI 判定：已完结" : "AI 判定：连载中";
+        badge.className = "status-inline success";
+    } catch(e) {
+        badge.textContent = "检测失败";
+        badge.className = "status-inline error";
+    }
+}
+
+async function refreshBook() {
+    const badge = document.getElementById("refresh-status");
+    badge.textContent = "刷新中...";
+    try {
+        const r = await fetch(`/api/v1/admin/refresh/${tid}`, {method: "POST"});
+        const d = await r.json();
+        badge.textContent = `${d.new_chapters} 个新章节`;
+        badge.className = "status-inline success";
+        loadChapters();
+    } catch(e) {
+        badge.textContent = "刷新失败";
+        badge.className = "status-inline error";
+    }
+}
+
+loadConfig();
+</script>
+{% endblock %}

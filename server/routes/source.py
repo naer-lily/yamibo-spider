@@ -14,6 +14,23 @@ from server.parsing.pid_links import PidLinksStrategy
 from server.adapters.lnreader import to_source_novel
 from server.config import ServerConfig
 
+import re
+
+COMPLETION_KEYWORDS = [
+    "终章", "最终话", "最終話", "最终回", "最終回",
+    "尾声", "尾聲", "完结", "完結", "大结局",
+    "epilogue", "final", "【完】", "［完］", "[完]",
+    "全篇完", "全文完", "已完结", "已完結", "正文完",
+]
+
+
+def _detect_completion_signal(chapter_titles: list[str]) -> bool:
+    for title in chapter_titles:
+        for kw in COMPLETION_KEYWORDS:
+            if kw.lower() in title.lower():
+                return True
+    return False
+
 router = APIRouter(prefix="/api/v1/source", tags=["source"])
 
 
@@ -72,7 +89,7 @@ async def parse_novel(tid: str, request: Request):
             # AI 只做元信息 + 策略判断
             first_post = extract_posts(html)
             first_tf = first_post[0][1] if first_post else html
-            meta, strategy, exclude_patterns, title_regex = await analyze_first_post(
+            meta, strategy, exclude_patterns, title_regex, _ = await analyze_first_post(
                 first_tf, tid, author_uid, cfg.ai,
             )
 
@@ -113,6 +130,14 @@ async def parse_novel(tid: str, request: Request):
                 await update_chapters(tid, result.new_chapters)
                 config = await load_book_config(tid)
 
+                # 检测完结信号
+                if config and config.meta.status != "completed":
+                    new_titles = [c.title for c in result.new_chapters]
+                    if _detect_completion_signal(new_titles):
+                        from server.db.database import update_book_status
+                        await update_book_status(tid, "completed")
+                        config = await load_book_config(tid)
+
     assert config is not None
     return to_source_novel(config, str(request.base_url))
 
@@ -123,4 +148,12 @@ async def parse_chapter(tid: str, pid: str):
         content = await fetch_chapter_content(client, tid, pid)
         if content is None:
             raise HTTPException(404, f"未找到楼层 pid={pid}")
-        return Response(content=clean_post_html(content), media_type="text/html")
+        html = clean_post_html(content)
+
+        # 繁转简
+        config = await load_book_config(tid)
+        if config and config.meta.t2s_enabled:
+            from server.utils.t2s import t2s
+            html = t2s(html)
+
+        return Response(content=html, media_type="text/html")

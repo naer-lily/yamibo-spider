@@ -15,6 +15,7 @@ def to_novel_item(config: BookConfig, base_url: str) -> dict:
 def to_source_novel(config: BookConfig, base_url: str) -> dict:
     """BookConfig → LNReader SourceNovel"""
     genres = ",".join(config.meta.tags) if config.meta.tags else ""
+    status = "Completed" if config.meta.status == "completed" else "Ongoing"
     return {
         "path": f"yamibo/{config.tid}",
         "name": config.meta.cn_title,
@@ -23,7 +24,7 @@ def to_source_novel(config: BookConfig, base_url: str) -> dict:
         "artist": "",
         "summary": config.meta.description,
         "genres": genres,
-        "status": "Ongoing",
+        "status": status,
         "chapters": [
             {
                 "name": ch.title,

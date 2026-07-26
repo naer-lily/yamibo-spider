@@ -35,6 +35,10 @@
 <hr>
 
 <h2>轮询配置</h2>
+<p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:12px">
+    默认关闭。LNReader App 的"更新书库"功能会自动触发后端增量检测，
+    无需服务端定时轮询。如需独立于客户端运行，可手动开启。
+</p>
 <form id="poll-form" onsubmit="savePollConfig(event)">
     <div class="inline-form">
         <label>轮询间隔（分钟）</label>
@@ -42,7 +46,7 @@
     </div>
     <div class="inline-form">
         <label>启用轮询</label>
-        <input type="checkbox" id="poll-enabled" checked>
+        <input type="checkbox" id="poll-enabled">
     </div>
     <button type="submit" class="btn btn-primary">保存轮询配置</button>
     <span id="poll-status" class="status-inline"></span>

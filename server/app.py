@@ -25,7 +25,7 @@ def load_config() -> ServerConfig:
     cfg.ai.model = os.environ.get("AI_MODEL", cfg.ai.model)
     cfg.ai.base_url = os.environ.get("AI_BASE_URL") or None
     cfg.poll_interval_minutes = int(os.environ.get("POLL_INTERVAL", "30"))
-    cfg.poll_enabled = os.environ.get("POLL_ENABLED", "1").lower() not in ("0", "false", "no")
+    cfg.poll_enabled = os.environ.get("POLL_ENABLED", "0").lower() in ("1", "true", "yes")
     return cfg
 
 

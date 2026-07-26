@@ -73,7 +73,7 @@ function renderBooks(books) {
     tbody.innerHTML = books.map(b => `
         <tr data-tid="${b.tid}">
             <td>${b.tid}</td>
-            <td><strong>${esc(b.title)}</strong></td>
+            <td><strong><a href="/admin/books/${b.tid}" style="color:inherit">${esc(b.title)}</a></strong></td>
             <td>${esc(b.author)}</td>
             <td>${b.strategy}</td>
             <td>${b.chapter_count}</td>

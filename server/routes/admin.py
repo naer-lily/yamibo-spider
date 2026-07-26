@@ -13,9 +13,9 @@ from server.config import AIProviderConfig, ServerConfig, COOKIE_PATH, ROOT
 from server.db.database import (
     load_book_config, update_chapters, list_books_detailed,
     delete_book, get_chapters, count_books, get_strategy_counts,
-    check_cookie_status,
+    check_cookie_status, update_book_config, update_book_status,
 )
-from server.yamibo.client import yamibo_client, parse_cookie_string, save_cookies, verify_cookie
+from server.yamibo.client import yamibo_client, parse_cookie_string, save_cookies, verify_cookie, fetch_first_post
 from server.parsing import STRATEGIES
 from server.library import scheduler
 
@@ -57,6 +57,11 @@ async def admin_config(request: Request):
 @router.get("/admin/cookie", response_class=HTMLResponse)
 async def admin_cookie_page(request: Request):
     return templates.TemplateResponse(request, "cookie.html")
+
+
+@router.get("/admin/books/{tid}", response_class=HTMLResponse)
+async def admin_book_config_page(tid: str, request: Request):
+    return templates.TemplateResponse(request, "book_config.html", {"request": request, "tid": tid})
 
 
 # ═══════════════════════════════════════════
@@ -200,6 +205,91 @@ async def refresh_book(tid: str):
         return {"status": "ok", "new_chapters": len(result.new_chapters)}
 
     return {"status": "ok", "new_chapters": 0}
+
+
+@router.get("/api/v1/admin/books/{tid}/config")
+async def get_book_config(tid: str):
+    """获取书目的完整可编辑配置"""
+    config = await load_book_config(tid)
+    if not config:
+        raise HTTPException(404, "书目未找到")
+    return {
+        "tid": config.tid,
+        "cn_title": config.meta.cn_title,
+        "jp_title": config.meta.jp_title,
+        "author": config.meta.author,
+        "description": config.meta.description,
+        "cover_url": config.meta.cover_url,
+        "tags": config.meta.tags,
+        "status": config.meta.status,
+        "t2s_enabled": config.meta.t2s_enabled,
+        "strategy": config.chapter_pattern.strategy.value,
+        "exclude_patterns": config.chapter_pattern.exclude_patterns,
+        "title_regex": config.chapter_pattern.title_regex,
+    }
+
+
+class UpdateBookConfigInput(BaseModel):
+    cn_title: str | None = None
+    jp_title: str | None = None
+    author: str | None = None
+    description: str | None = None
+    cover_url: str | None = None
+    tags: list[str] | None = None
+    status: str | None = None
+    t2s_enabled: bool | None = None
+
+
+@router.put("/api/v1/admin/books/{tid}/config")
+async def update_book_config_route(tid: str, data: UpdateBookConfigInput):
+    """更新书目配置"""
+    config = await load_book_config(tid)
+    if not config:
+        raise HTTPException(404, "书目未找到")
+
+    if data.cn_title is not None:
+        config.meta.cn_title = data.cn_title
+    if data.jp_title is not None:
+        config.meta.jp_title = data.jp_title
+    if data.author is not None:
+        config.meta.author = data.author
+    if data.description is not None:
+        config.meta.description = data.description
+    if data.cover_url is not None:
+        config.meta.cover_url = data.cover_url
+    if data.tags is not None:
+        config.meta.tags = data.tags
+    if data.status is not None:
+        config.meta.status = data.status
+    if data.t2s_enabled is not None:
+        config.meta.t2s_enabled = data.t2s_enabled
+
+    await update_book_config(tid, config.meta)
+    return {"status": "ok"}
+
+
+@router.post("/api/v1/admin/books/{tid}/check-completed")
+async def check_book_completed(tid: str, request: Request):
+    """AI 检查作品是否完结（拉首楼 + 末页）"""
+    cfg: ServerConfig = request.app.state.server_config
+    config = await load_book_config(tid)
+    if not config:
+        raise HTTPException(404, "书目未找到")
+
+    async with yamibo_client() as client:
+        html = await fetch_first_post(client, tid)
+        from server.ai.analyzer import analyze_first_post
+        from server.yamibo.parser import extract_posts
+        posts = extract_posts(html)
+        first_tf = posts[0][1] if posts else html
+
+        _, _, _, _, is_completed = await analyze_first_post(
+            first_tf, tid, config.author_uid, cfg.ai,
+        )
+
+    new_status = "completed" if is_completed else "ongoing"
+    await update_book_status(tid, new_status)
+    return {"status": "ok", "is_completed": is_completed}
 
 
 # ═══════════════════════════════════════════
