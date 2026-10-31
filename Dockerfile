@@ -4,6 +4,7 @@ WORKDIR /app
 
 # 运行时依赖（不含 playwright，登录在宿主机完成）
 COPY requirements-docker.txt .
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 RUN pip install --no-cache-dir -r requirements-docker.txt
 
 # 复制源代码
